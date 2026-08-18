@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Parrot Orbit - HIRO Marker</title>
+  
+  <!-- A-Frame & AR.js Libraries -->
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+  
+  <style>
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
+    
+    /* UI Overlay Control */
+    .ui-container {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 90%;
+      max-width: 360px;
+    }
+    
+    .status-box {
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+    .status-box.found {
+      background: rgba(46, 204, 113, 0.9);
+      color: #fff;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .btn {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .btn:active { transform: scale(0.95); }
+    .btn-reset { background: #e74c3c; }
+  </style>
+</head>
+<body>
+
+  <!-- UI หน้าจอ -->
+  <div class="ui-container">
+    <div id="status" class="status-box">กำลังค้นหา HIRO Marker...</div>
+    <div class="controls">
+      <button id="btn-speed" class="btn">เพิ่มความเร็ว (1.0x)</button>
+      <button id="btn-reset" class="btn btn-reset">ปกติ (1x)</button>
+    </div>
+  </div>
+
+  <!-- AR Scene -->
+  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+    
+    <!-- โหลด Asset 3D Model -->
+    <a-assets>
+      <a-asset-item id="parrotModel" src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/models/gltf/Parrot.glb"></a-asset-item>
+    </a-assets>
+
+    <!-- HIRO Marker -->
+    <a-marker preset="hiro" id="hiro-marker">
+      
+      <!-- นกตัวที่ 1: วงโคจรแคบ (1.5m), สูงต่ำ (1.0m), ความเร็วปกติ -->
+      <a-entity id="pivot1">
+        <a-entity id="parrot1"
+                  gltf-model="#parrotModel"
+                  position="1.5 1.0 0"
+                  rotation="0 90 0"
+                  scale="0.01 0.01 0.01"
+                  animation-mixer="clip: *; timeScale: 1">
+        </a-entity>
+      </a-entity>
+
+      <!-- นกตัวที่ 2: วงโคจรกว้าง (2.8m), สูงมาก (2.2m), บินสวนทาง -->
+      <a-entity id="pivot2">
+        <a-entity id="parrot2"
+                  gltf-model="#parrotModel"
+                  position="-2.8 2.2 0"
+                  rotation="0 -90 0"
+                  scale="0.012 0.012 0.012"
+                  animation-mixer="clip: *; timeScale: 1">
+        </a-entity>
+      </a-entity>
+
+    </a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    let speedMultiplier = 1.0;
+    const maxSpeed = 4.0;
+    
+    const pivot1 = document.getElementById('pivot1');
+    const pivot2 = document.getElementById('pivot2');
+    const parrot1 = document.getElementById('parrot1');
+    const parrot2 = document.getElementById('parrot2');
+    const marker = document.getElementById('hiro-marker');
+    const statusEl = document.getElementById('status');
+    const btnSpeed = document.getElementById('btn-speed');
+    const btnReset = document.getElementById('btn-reset');
+
+    // 1. ระบบตรวจจับ HIRO Marker
+    marker.addEventListener('markerFound', () => {
+      statusEl.textContent = 'พบ HIRO Marker';
+      statusEl.classList.add('found');
+    });
+
+    marker.addEventListener('markerLost', () => {
+      statusEl.textContent = 'กำลังค้นหา HIRO Marker...';
+      statusEl.classList.remove('found');
+    });
+
+    // 2. ความเร็วพื้นฐานการบินวนรอบ Marker (องศา/เฟรม)
+    const baseSpeed1 = 1.2;
+    const baseSpeed2 = -0.7; // ค่าลบเพื่อให้บินสวนทางกัน
+    let rot1 = 0;
+    let rot2 = 0;
+
+    function animateOrbit() {
+      requestAnimationFrame(animateOrbit);
+
+      // คำนวณมุมหมุนตามตัวคูณความเร็ว
+      rot1 += baseSpeed1 * speedMultiplier;
+      rot2 += baseSpeed2 * speedMultiplier;
+
+      pivot1.setAttribute('rotation', `0 ${rot1} 0`);
+      pivot2.setAttribute('rotation', `0 ${rot2} 0`);
+    }
+    animateOrbit();
+
+    // 3. ฟังก์ชันอัปเดตความเร็วการบินและการกระพือปีก
+    function setSpeed(newSpeed) {
+      speedMultiplier = Math.min(newSpeed, maxSpeed);
+      
+      // ปรับความเร็ว Animation กระพือปีกผ่าน timeScale
+      parrot1.setAttribute('animation-mixer', `clip: *; timeScale: ${speedMultiplier}`);
+      parrot2.setAttribute('animation-mixer', `clip: *; timeScale: ${speedMultiplier}`);
+      
+      btnSpeed.textContent = `เพิ่มความเร็ว (${speedMultiplier.toFixed(1)}x)`;
+    }
+
+    // ปุ่มกดเพิ่มความเร็ว (+0.5x สูงสุด 4x)
+    btnSpeed.addEventListener('click', () => {
+      if (speedMultiplier < maxSpeed) {
+        setSpeed(speedMultiplier + 0.5);
+      }
+    });
+
+    // ปุ่มกดคืนค่าปกติ (1x)
+    btnReset.addEventListener('click', () => {
+      setSpeed(1.0);
+    });
+  </script>
+</body>
+</html>
